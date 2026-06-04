@@ -5,3 +5,6 @@ __pycache__/
 inbox/
 kanri-postgre-sql/
 neon_test_parts/
+Billing Management/
+*.txt
+*.sql

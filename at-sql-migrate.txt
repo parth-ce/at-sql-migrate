@@ -94,3 +94,19 @@ moved 2 CRM tables to neon
 mg2
 kh2
 
+-------
+
+26.06.03
+
+MIGRATE KINMU KANRI!!!
+
+-------
+
+26.06.04
+
+請求管理
+
+請求書入力 - invoice_entries
+請求管理簿用 - invoice_register
+案件(合算) - projects_consolidated
+部署別 - department_summary
