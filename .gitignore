@@ -1,0 +1,6 @@
+v*/
+*.md
+__pycache__/
+inbox/
+kanri-postgre-sql/
+neon_test_parts/

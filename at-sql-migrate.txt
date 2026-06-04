@@ -1,0 +1,96 @@
+26.04.28
+
+DONE 1. date issue: all dates are shown as 0000-00-00. 
+data and time are also same: 0000-00-00 00:00:00
+but time alone is fine
+
+DONE 2. some of the fields ae showing weird data like ["\u30eb \u30f4"]. some are multiple selects, some are linked fields.. the single selects are all fine i think
+
+DONE 3. upon more checking, it seems like these are displayed in unicode-escaped japanese text.. i wonder why some are like this?? bc in most of other fields the japanese characters are shown completely fine.
+
+4. one linked field is shown as NULL for some reason. other linked fields work so why not this one?? 退職企業 resignation_company
+
+DOESNT MATTER 5. total data wasnt moved?? upto 1179 were in sql out of 1183. last 4 werent migrated?? there are no duplicates either.. not really an issue tbh, just somethign to look into!
+
+DONE 6. checkboxes are not shown correct. i meean everything is blank, checked data is shown blank as well.. in some places the checkboxes are shown as 0. both checked and unchecked ones are shown as 0
+
+FINE AS IT IS 7. what about the attachments?? currently its shown like some kind of links like:
+["NTR-F_2300001.jpg (https:\/\/v5.airtableusercont...
+
+
+
+1. dates are fixed and it shows correct but for the blank ones its showing 0000-00-00. can this be changed to blank?? if not, its okay!!
+
+2. the 退職企業 which is resignation_company is still showin NULL. its a linked field. other linked fields are working fine. why not this one??
+
+i think the only main issue currently is the 退職企業 showinng NULL. the date issue isnt realy necessary, its mostly for the visual clarity. 
+
+-------
+
+26.04.30
+
+FIXED need to fix 退職企業 showing NULL in the SQL, even though other linked fields are showing correct. 
+FIXED Try the 0000-00-00 date issue as well, but since its not necessary its okay to skip!!
+
+'lookup' changed to 'multipleLookupValues'
+
+-------
+
+26.05.07
+
+sh - 2
+kh - 3
+mg - 3
+
+55
+10
+15
+5
+30
+10
+2
+10
+50
+
+-------
+
+26.05.08
+
+find the solution to the image issue!!
+not an issue!! all good!
+
+-------
+
+26.05.12
+
+upload on neon
+having size limit issue when migrating the complete table
+
+150+ mb takes too long!!
+
+made the convert.py
+change the .sql file name and run it using powershell
+from the postgresql, delete the top sql lines
+
+-------
+
+26.05.13
+
+work on migrating the 給与台帳 table again!!
+
+the no, which was a formula field was showing NULL for some reason. ig bc of some issue with primary field or something.. anyway, that was fixed!!
+
+5in1
+
+kyuyo daicho moved to the neon postgresql. 
+both the old_airtable and gb_inside moved
+
+-------
+
+26.06.01
+
+moved 2 CRM tables to neon
+
+mg2
+kh2
+
