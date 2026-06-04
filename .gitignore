@@ -1,5 +1,6 @@
 v*/
 *.md
+!README.md
 __pycache__/
 inbox/
 kanri-postgre-sql/
