@@ -595,14 +595,17 @@ function migrateDataFromIterable($conn, $schema, $records, $suffix) {
     $duplicate_en_columns = findDuplicateSchemaEnColumns($schema);
     $duplicate_en_message = formatDuplicateSchemaEnColumnsMessage($duplicate_en_columns);
 
-    // Create tables
-    $old_air_sql = createTableSQL($old_air_table, $schema);
+    $old_air_row_adjust = adjustSchemaSqlTypesForMysqlRowLimit($schema);
+    $gb_inside_row_adjust = adjustSchemaSqlTypesForMysqlRowLimit($base_fields);
+
+    // Create tables (sql_type may use TEXT instead of wide VARCHAR when row size exceeds MySQL limit)
+    $old_air_sql = createTableSQL($old_air_table, $old_air_row_adjust['schema']);
     if (!$conn->query($old_air_sql)) {
         $detail = $duplicate_en_message !== '' ? "\n\n" . $duplicate_en_message : '';
         throw new Exception("Failed to create old_air table: " . $conn->error . $detail);
     }
     
-    $gb_inside_sql = createTableSQL($gb_inside_table, $base_fields);
+    $gb_inside_sql = createTableSQL($gb_inside_table, $gb_inside_row_adjust['schema']);
     if (!$conn->query($gb_inside_sql)) {
         $gb_dups = findDuplicateSchemaEnColumns($base_fields);
         $detail = formatDuplicateSchemaEnColumnsMessage($gb_dups);
@@ -668,6 +671,10 @@ function migrateDataFromIterable($conn, $schema, $records, $suffix) {
         'excluded_fields' => $excluded_fields,
         'duplicate_en_columns' => $duplicate_en_columns,
         'duplicate_en_message' => $duplicate_en_message,
+        'row_size_adjustments' => [
+            'old_air' => $old_air_row_adjust['adjustments'],
+            'gb_inside' => $gb_inside_row_adjust['adjustments'],
+        ],
     ];
 }
 
@@ -740,6 +747,117 @@ function formatDuplicateSchemaEnColumnsMessage(array $duplicates) {
     $lines[] = 'Tip: filter by schema table name (column B) if the Excel lists multiple Airtable tables.';
 
     return implode("\n", $lines);
+}
+
+/**
+ * Estimated bytes a column contributes to MySQL's 65535 row-size limit (utf8mb4 worst case).
+ */
+function mysqlSqlTypeRowSizeBytes($sql_type) {
+    $u = strtoupper(trim((string) $sql_type));
+
+    if (preg_match('/^VARCHAR\s*\(\s*(\d+)\s*\)/i', $u, $m)) {
+        return (int) $m[1] * 4 + 2;
+    }
+    if (preg_match('/^CHAR\s*\(\s*(\d+)\s*\)/i', $u, $m)) {
+        return (int) $m[1] * 4 + 2;
+    }
+    if (preg_match('/^VARBINARY\s*\(\s*(\d+)\s*\)/i', $u, $m)) {
+        return (int) $m[1] + 2;
+    }
+    if (preg_match('/^BINARY\s*\(\s*(\d+)\s*\)/i', $u, $m)) {
+        return (int) $m[1] + 1;
+    }
+    if (preg_match('/^(TINYINT|BOOL|BOOLEAN)\b/', $u)) {
+        return 1;
+    }
+    if (preg_match('/^SMALLINT\b/', $u)) {
+        return 2;
+    }
+    if (preg_match('/^MEDIUMINT\b/', $u)) {
+        return 3;
+    }
+    if (preg_match('/^INT\b|^INTEGER\b/', $u)) {
+        return 4;
+    }
+    if (preg_match('/^BIGINT\b/', $u)) {
+        return 8;
+    }
+    if (preg_match('/^FLOAT\b/', $u)) {
+        return 4;
+    }
+    if (preg_match('/^DOUBLE\b/', $u)) {
+        return 8;
+    }
+    if (preg_match('/^DECIMAL\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)/i', $u, $m)) {
+        return (int) (((int) $m[1] - (int) $m[2]) / 2 + (int) $m[2] + 1);
+    }
+    if (preg_match('/^DATE\b/', $u)) {
+        return 3;
+    }
+    if (preg_match('/^TIME\b/', $u)) {
+        return 3;
+    }
+    if (preg_match('/^DATETIME\b|^TIMESTAMP\b/', $u)) {
+        return 8;
+    }
+    if (preg_match('/^YEAR\b/', $u)) {
+        return 1;
+    }
+    if (preg_match('/^ENUM\b/', $u)) {
+        return 2;
+    }
+    if (preg_match('/^SET\b/', $u)) {
+        return 8;
+    }
+    if (preg_match('/TEXT|BLOB|JSON/i', $u)) {
+        return 12;
+    }
+
+    return 12;
+}
+
+/**
+ * Downgrade wide VARCHAR/CHAR columns to TEXT so CREATE TABLE stays under MySQL's 65535 row limit.
+ *
+ * @return array{schema: array, adjustments: list<array{jp_name: string, en_name: string, from: string, to: string}>}
+ */
+function adjustSchemaSqlTypesForMysqlRowLimit(array $schema, $limit = 65000) {
+    $adjusted = [];
+    $row_bytes = 4;
+    $varchar_jp = [];
+
+    foreach ($schema as $jp_name => $field_info) {
+        $adjusted[$jp_name] = $field_info;
+        $sql_type = isset($field_info['sql_type']) ? trim((string) $field_info['sql_type']) : '';
+        $bytes = mysqlSqlTypeRowSizeBytes($sql_type);
+        $row_bytes += $bytes;
+        if (preg_match('/^VARCHAR\s*\(/i', $sql_type) || preg_match('/^CHAR\s*\(/i', $sql_type)) {
+            $varchar_jp[$jp_name] = $bytes;
+        }
+    }
+
+    $adjustments = [];
+    if ($row_bytes <= $limit) {
+        return ['schema' => $adjusted, 'adjustments' => $adjustments];
+    }
+
+    arsort($varchar_jp);
+    foreach ($varchar_jp as $jp_name => $bytes) {
+        if ($row_bytes <= $limit) {
+            break;
+        }
+        $from = $adjusted[$jp_name]['sql_type'];
+        $adjusted[$jp_name]['sql_type'] = 'TEXT';
+        $row_bytes = $row_bytes - $bytes + mysqlSqlTypeRowSizeBytes('TEXT');
+        $adjustments[] = [
+            'jp_name' => $jp_name,
+            'en_name' => isset($adjusted[$jp_name]['en_name']) ? (string) $adjusted[$jp_name]['en_name'] : '',
+            'from' => $from,
+            'to' => 'TEXT',
+        ];
+    }
+
+    return ['schema' => $adjusted, 'adjustments' => $adjustments];
 }
 
 function createTableSQL($table_name, $schema) {

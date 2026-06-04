@@ -204,6 +204,20 @@ if ($table_suffix) {
                     <pre style="margin-top:8px;white-space:pre-wrap;font-size:12px;font-family:monospace;"><?php echo htmlspecialchars($result['duplicate_en_message']); ?></pre>
                 </div>
             <?php endif; ?>
+
+            <?php
+            $row_adj = $result['row_size_adjustments'] ?? [];
+            $row_adj_count = count($row_adj['old_air'] ?? []) + count($row_adj['gb_inside'] ?? []);
+            if ($row_adj_count > 0):
+            ?>
+                <div class="warning">
+                    <strong>Schema note — MySQL row size limit</strong>
+                    <p style="margin-top:8px;font-size:13px;">
+                        <?php echo (int) $row_adj_count; ?> column(s) were created as <code>TEXT</code> instead of wide <code>VARCHAR</code>
+                        so the table fits MySQL’s 65535-byte row limit. Data is unchanged; only the storage type differs.
+                    </p>
+                </div>
+            <?php endif; ?>
             
             <?php if (!empty($result['excluded_fields'])): ?>
                 <div class="excluded-fields">
